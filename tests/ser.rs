@@ -1,3 +1,4 @@
+use serde::{Serialize, Serializer};
 use serde_derive::Serialize;
 
 use std::collections::HashMap;
@@ -113,12 +114,19 @@ fn serializes_string() {
 }
 
 #[test]
-#[ignore] // TODO currently unsupported
-fn serializes_bytes() {}
-
-#[test]
-#[ignore] // TODO currently unsupported
-fn serializes_byte_buf() {}
+fn serializes_bytes() {
+    #[derive(Debug, PartialEq)]
+    struct Bytes<'a>(&'a [u8]);
+    impl Serialize for Bytes<'_> {
+        fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+            serializer.serialize_bytes(self.0)
+        }
+    }
+    serializes_to(Bytes(b""), "[]");
+    serializes_to(Bytes(b"a"), "[97]");
+    serializes_to(Bytes(&[0, 255]), "[0,255]");
+    serializes_to(Bytes(b"abc"), "[97,98,99]");
+}
 
 #[test]
 fn serializes_option() {
@@ -198,6 +206,23 @@ fn serializes_map() {
     outer.insert("a".to_owned(), inner);
 
     serializes_to(outer, "{\"a\":{\"b\":true}}");
+}
+
+#[test]
+fn serializes_map_integer_keys() {
+    let mut map = HashMap::new();
+    map.insert(5, ());
+    serializes_to(map, "{\"5\":null}");
+}
+
+#[test]
+fn non_string_keys() {
+    let mut map = HashMap::new();
+    map.insert((), true);
+    assert_eq!(
+        json5::to_string(&map).unwrap_err().to_string(),
+        "key must be a string"
+    );
 }
 
 #[test]
